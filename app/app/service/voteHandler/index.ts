@@ -83,75 +83,101 @@ class VoteHandler {
 
   private subscriber = [];
 
+  /**
+   * Update data from contract
+   * You need to fetch data form contract and assign the value to
+   * `candidateData`, `isVoting`, `round`, `candidatesList`, `guaranteedDeposit`
+   * 
+   * @todo Implement this function.
+   */
   private updateContractData = throttle(async () => {
-    this.contractDataLoaded = false;
-    const [
-      round,
-      isVoting,
-      candidatesList,
-      guaranteedDeposit,
-    ] = await Promise.all([
-      this.contractRead.methods.round().call(),
-      this.contractRead.methods.isVoting().call(),
-      this.contractRead.methods.getCandidatesList().call(),
-      this.contractRead.methods.guaranteedDeposit().call(),
-    ]);
-    this.isVoting = isVoting;
-    this.round = round;
-    this.candidatesList = candidatesList;
-    this.guaranteedDeposit = guaranteedDeposit;
-    for (const addr of candidatesList) {
-      const data = await this.contractRead.methods.candidateData(round, addr).call();
-      const { name, vote, candidateNumber } = data;
-      this.candidateData[addr] = { name, vote, candidateNumber };
-    }
-    // console.log(isVoting, this.candidatesList, this.candidateData);
-    this.contractDataLoaded = true;
+    
   }, 500);
 
   constructor() {
     this.init();
   }
 
+  /**
+   * Start a new round of the election
+   * 
+   * @todo Implement this function.
+   */
   public startVoting() {
-    this.writeContract('startVoting', []);
+
   }
+
+  /**
+   * Reset the election and announce the elected person
+   * 
+   * @todo Implement this function.
+   */
   public resetElection() {
-    this.writeContract('resetElection', []);
+
   }
+
+  /**
+   * Vote to the candidate
+   * 
+   * @todo Implement this function.
+   * @param address - candidate address
+   */
   public vote(address : string) {
-    this.writeContract('vote', [address]);
+
   }
+
+  /**
+   * Register to be a election candidate
+   * 
+   * @todo Implement this function.
+   * @param name - candidate name
+   */
   public register(name : string) {
-    this.writeContract('register', [name], this.guaranteedDeposit);
+
   }
+
+  /**
+   * Sponsor candidate for the election
+   * 
+   * @todo Implement this function.
+   * @param address - candidate address
+   * @param amount - amount of DEXON token
+   */
   public sponsorCandidate(address : string, amount : string) {
-    this.writeContract('sponsor', [address], this.dxnToDei(amount));
+
   }
 
-  public deiToDxn = (amount) => this.web3.utils.fromWei(amount);
-  public dxnToDei = (amount) => this.web3.utils.toWei(amount);
+  /**
+   * Helper function to transform Dei to Dex
+   *
+   * @todo Implement this function.
+   * @param amount - amount of DEXON token (in Dei unit)
+   */
+  public deiToDex = (amount: string) => {
 
+  }
+
+  /**
+   * Helper function to transform Dex to Dei
+   *
+   * @todo Implement this function.
+   * @param amount - amount of DEXON token
+   */
+  public dexToDei = (amount: string) => {
+
+  }
+
+  /**
+   * Helper function about sending a trasaction to contract and execute its method
+   *
+   * @todo Implement this function. (hint: becareful about the permission to access user's account)
+   * @param method - contract method name you want to call
+   * @param params - array of parameters to pass to contract method
+   */
   private writeContract = async (
     method : string, params : Array<any>, value? : string
   ) => {
-    if (this.contractWrite) {
-      try {
-        await INJECTED.enable();
-        const walletAddr = await this.getWalletAddress();
-        // console.log(walletAddr);
-        this.contractWrite
-          .methods[method](...params)
-          .send({ from: walletAddr, value: value || undefined })
-          .on('confirmation', () => {})
-          .on('receipt', () => {
-            console.log(`successfully performed [${method}]`);
-          })
-          .on('error', () => console.log('unexpected error'));
-      } catch(e) {
 
-      }
-    }
   }
 
   private init = async () => {
@@ -166,80 +192,62 @@ class VoteHandler {
       (netId !== DEXON_TESTNET_ID) &&
       (window.location.hostname !== 'localhost')
     ) {
-      alert('Please Select "DEXON Testt Network" in DekuSan wallet');
+      alert('Please Select "DEXON Test Network" in DekuSan wallet');
       return;
     }
     this.wsHandler = new this.web3.default(WS_PROVIDER());
     this.initDone = true;
 
-    // setTimeout(() => this.contractInit('0x623718b15295934386bd7569f42027b911751861'), 500);
+    // this.contractInit('contract address');
   }
 
   private getNetworkId = () => this.walletHandler.eth.net.getId();
+
+  /**
+   * Get wallet first address in the account list
+   *
+   * @todo Implement this function.
+   * @returns first address in the account list
+   */
   private getWalletAddress = async () => {
-    const addr = await this.walletHandler.eth.getAccounts();
-    return addr[0];
   }
 
+  /**
+   * Subscribe all events we need and store those data to
+   * `electedPerson`, `sponsorHistory`, `refundHistory`
+   * 
+   * History data also need to fetch from here.
+   * 
+   * Events: `elected`, `sponsorCandidate`, `refund`, `voteStart`, `registered`, `reset` and `voteCandidate`
+   * (Hint: you only need to fetch data again when receive `voteStart`, `registered`, `reset` and `voteCandidate`)
+   * 
+   * @todo Implement this function.
+   * @returns first address in the account list
+   */
   private async subscribeData() {
     this.unsubscribeAndClearAll();
 
-    const pastElectedPerson = await this.contractRead.getPastEvents('elected', { fromBlock: 0, toBlock: 'latest' });
-    pastElectedPerson.forEach(this.electedPersonOnReceived);
-
-    const pastSponsorHistory = await this.contractRead.getPastEvents('sponsorCandidate', { fromBlock: 0, toBlock: 'latest' });
-    pastSponsorHistory.forEach(this.sponsorOnReceived);
-
-    const pastRefundHistory = await this.contractRead.getPastEvents('refund', { fromBlock: 0, toBlock: 'latest' });
-    pastRefundHistory.forEach(this.refundOnReceived);
-
-    this.handleSubscribe('voteStart', () => {
-      this.updateContractData();
-    });
-    this.handleSubscribe('registered', () => {
-      this.updateContractData();
-    });
-    this.handleSubscribe('elected', this.electedPersonOnReceived);
-
-    this.handleSubscribe('sponsorCandidate', this.sponsorOnReceived);
-    this.handleSubscribe('refund', this.refundOnReceived);
-
-    this.handleSubscribe('reset', () => {
-      this.updateContractData();
-    });
-    this.handleSubscribe('voteCandidate', () => {
-      this.updateContractData();
-    });
   }
 
+  /**
+   * Helper function about subscribing the event from contract
+   *
+   * @todo Implement this function.
+   * @param eventName - event name
+   * @param cb - callback function
+   */
   private handleSubscribe(eventName : string, cb : (...args : Array<any>) => any) {
-    const subscriber = this.contractRead.events[eventName]({}, (err, ...args) => {
-      if (!err) {
-        cb(...args);
-      }
-    });
+    const subscriber = undefined; // your subscription logic need to assign to subscriber variable
+
     this.subscriber.push(subscriber);
   }
+
   private unsubscribeAndClearAll() {
     this.electedPerson = {};
     this.sponsorHistory = [];
     this.refundHistory = [];
     this.subscriber.forEach((sub) => sub.unsubscribe && sub.unsubscribe());
     this.subscriber = [];
-  }
-  private electedPersonOnReceived = ({ returnValues }) => {
-    const { candidate, name, round, vote } = returnValues;
-    this.electedPerson[round] = { candidate, name, vote };
-  }
-  private sponsorOnReceived = ({ returnValues }) => {
-    const { candidate, sponsor, round, amount, name } = returnValues;
-    this.sponsorHistory.push({ candidate, sponsor, round, amount, name });
-  }
-
-  private refundOnReceived = ({ returnValues }) => {
-    console.log('refund', returnValues);
-    const { candidate, round, amount, name } = returnValues;
-    this.refundHistory.push({ candidate, round, amount, name });
   }
 }
 
