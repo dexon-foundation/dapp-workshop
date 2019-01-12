@@ -5,13 +5,14 @@ const BN = web3.utils.BN;
 const getBalance = async (address) => new BN(await web3.eth.getBalance(address));
 
 async function tryCatch(promise, reason) {
+  let errMsg = '';
   try {
     await promise;
   }
   catch (error) {
-    const isErrorOccur = error.message.includes(reason);
-    assert.equal(isErrorOccur, true, `Expected to fail with ${reason}, but failed with: ${error.message}`);
+    errMsg = error.message
   }
+  assert.include(errMsg, reason, `Expected to fail with ${reason}, but failed with: ${errMsg}`);
 };
 
 contract('Election', (accounts) => {
